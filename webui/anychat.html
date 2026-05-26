@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AnyChat</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0f1117;
+      --surface:    #1c1e26;
+      --surface2:   #252a32;
+      --border:     #2d3039;
+      --accent:     #6366f1;
+      --accent-h:   #818cf8;
+      --text:       #e2e8f0;
+      --text-sub:   #94a3b8;
+      --own-bg:     #312e81;
+      --own-border: #4338ca;
+      --own-text:   #e0e7ff;
+      --sys-color:  #64748b;
+      --ok:         #22c55e;
+      --err:        #ef4444;
+      --warn:       #f59e0b;
+      --radius:     12px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ── screens ── */
+    .screen {
+      display: none;
+      height: 100dvh;
+      height: 100vh; /* fallback */
+    }
+    .screen.active { display: flex; }
+
+    /* ── join screen ── */
+    #join-screen {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .join-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+    }
+
+    .logo {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .logo span { color: var(--accent); }
+
+    .tagline {
+      color: var(--text-sub);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--sys-color); }
+
+    .input-hint {
+      font-size: 12px;
+      color: var(--sys-color);
+      margin-top: 6px;
+    }
+
+    .error-msg {
+      display: none;
+      color: var(--err);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .error-msg.show { display: block; }
+
+    .btn-primary {
+      display: block;
+      width: 100%;
+      margin-top: 24px;
+      padding: 13px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── chat screen ── */
+    #chat-screen {
+      flex-direction: column;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* center panel with side borders on wide screens */
+    @media (min-width: 820px) {
+      #chat-screen {
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .chat-title {
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .chat-callsign {
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-left: 8px;
+    }
+
+    /* ── status indicator ── */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--sys-color);
+    }
+    .status.connected    .status-dot { background: var(--ok); }
+    .status.disconnected .status-dot { background: var(--err); }
+    .status.connecting   .status-dot,
+    .status.reconnecting .status-dot { background: var(--warn); animation: blink 1s ease-in-out infinite; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.25; }
+    }
+
+    /* ── message list ── */
+    #message-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── message rows ── */
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 72%;
+    }
+    .msg-row.own    { align-self: flex-end;  align-items: flex-end; }
+    .msg-row.other  { align-self: flex-start; align-items: flex-start; }
+    .msg-row.system { align-self: center;     max-width: 100%; }
+
+    .msg-callsign {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-bottom: 3px;
+      font-weight: 600;
+      padding: 0 4px;
+    }
+
+    .msg-bubble {
+      padding: 9px 13px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .msg-row.own .msg-bubble {
+      background: var(--own-bg);
+      border: 1px solid var(--own-border);
+      border-bottom-right-radius: 4px;
+      color: var(--own-text);
+    }
+    .msg-row.other .msg-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .msg-row.system .msg-bubble {
+      background: transparent;
+      border: none;
+      color: var(--sys-color);
+      font-size: 12px;
+      font-style: italic;
+      padding: 2px 0;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--sys-color);
+      margin-top: 3px;
+      padding: 0 4px;
+    }
+
+    /* ── reconnect banner ── */
+    #reconnect-banner {
+      display: none;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #450a0a;
+      border-top: 1px solid #7f1d1d;
+      padding: 10px 20px;
+      font-size: 13px;
+      color: #fca5a5;
+    }
+    #reconnect-banner.show { display: flex; }
+    .btn-reconnect {
+      background: var(--err);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .btn-reconnect:hover { opacity: 0.85; }
+
+    /* ── input area ── */
+    .input-area {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 12px 16px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #msg-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      padding: 10px 16px;
+      outline: none;
+      resize: none;
+      overflow-y: auto;
+      max-height: 120px;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+    }
+    #msg-input:focus { border-color: var(--accent); }
+    #msg-input::placeholder { color: var(--sys-color); }
+
+    #send-btn {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+    }
+    #send-btn:hover:not(:disabled) { background: var(--accent-h); }
+    #send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    #send-btn svg { width: 20px; height: 20px; fill: #fff; }
+
+    /* ── mobile ── */
+    @media (max-width: 480px) {
+      .join-card { padding: 28px 20px; }
+      .chat-header { padding: 12px 14px; }
+      #message-list { padding: 12px 14px; }
+      .input-area { padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+      .msg-row { max-width: 86%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Join Screen ─────────────────────────────── -->
+<div id="join-screen" class="screen active">
+  <div class="join-card">
+    <div class="logo">Any<span>Chat</span></div>
+    <div class="tagline">Anonymous real-time chat — no account needed.</div>
+
+    <label for="callsign-input">Your callsign</label>
+    <input
+      type="text"
+      id="callsign-input"
+      placeholder="e.g. Ghost42"
+      maxlength="20"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <div class="input-hint">Letters, numbers, underscores · 1–20 characters</div>
+    <div id="join-error" class="error-msg" role="alert"></div>
+
+    <button class="btn-primary" id="join-btn">Join Chat</button>
+  </div>
+</div>
+
+<!-- ── Chat Screen ─────────────────────────────── -->
+<div id="chat-screen" class="screen">
+  <header class="chat-header">
+    <div class="chat-title">
+      AnyChat<span class="chat-callsign" id="header-callsign"></span>
+    </div>
+    <div class="status" id="status-indicator" role="status" aria-live="polite">
+      <div class="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </header>
+
+  <div id="message-list" role="log" aria-live="polite" aria-label="Chat messages"></div>
+
+  <div id="reconnect-banner" role="alert">
+    <span>Connection lost — could not reconnect automatically.</span>
+    <button class="btn-reconnect" id="reconnect-btn">Reconnect</button>
+  </div>
+
+  <div class="input-area">
+    <textarea
+      id="msg-input"
+      placeholder="Type a message…"
+      maxlength="1000"
+      rows="1"
+      aria-label="Message input"
+    ></textarea>
+    <button id="send-btn" aria-label="Send message" disabled>
+      <!-- Send icon -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+// Set window.ANYCHAT_WS_ENDPOINT before this script to override,
+// or pass ?ws=wss://... in the URL for quick testing.
+const WS_ENDPOINT =
+  (typeof window.ANYCHAT_WS_ENDPOINT === 'string' && window.ANYCHAT_WS_ENDPOINT) ||
+  new URLSearchParams(location.search).get('ws') ||
+  'wss://default.execute-api.us-west-2.amazonaws.com/prod';
+
+// ── Constants ─────────────────────────────────────────────────
+const CALLSIGN_RE = /^[a-zA-Z0-9_]{1,20}$/;
+const MAX_RECONNECT = 5;
+const BACKOFF_MS    = [2000, 4000, 8000, 16000, 30000];
+
+// ── State ─────────────────────────────────────────────────────
+let callsign        = '';
+let ws              = null;
+let inChat          = false;   // true once we've successfully connected once
+let reconnectCount  = 0;
+let reconnectTimer  = null;
+let currentStatus   = '';
+
+// ── DOM ───────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const joinScreen      = $('join-screen');
+const chatScreen      = $('chat-screen');
+const callsignInput   = $('callsign-input');
+const joinBtn         = $('join-btn');
+const joinError       = $('join-error');
+const headerCallsign  = $('header-callsign');
+const statusIndicator = $('status-indicator');
+const statusText      = $('status-text');
+const messageList     = $('message-list');
+const reconnectBanner = $('reconnect-banner');
+const reconnectBtn    = $('reconnect-btn');
+const msgInput        = $('msg-input');
+const sendBtn         = $('send-btn');
+
+// ── Join ──────────────────────────────────────────────────────
+function tryJoin() {
+  const val = callsignInput.value.trim();
+  if (!CALLSIGN_RE.test(val)) {
+    showJoinError('Callsign must be 1–20 characters: letters, numbers, or underscores.');
+    callsignInput.focus();
+    return;
+  }
+  callsign = val;
+  clearJoinError();
+  joinBtn.disabled = true;
+  joinBtn.textContent = 'Connecting…';
+  connect();
+}
+
+function showJoinError(msg) {
+  joinError.textContent = msg;
+  joinError.classList.add('show');
+}
+function clearJoinError() {
+  joinError.classList.remove('show');
+}
+
+// ── WebSocket ─────────────────────────────────────────────────
+function connect() {
+  if (ws) {
+    ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+    ws.close();
+    ws = null;
+  }
+
+  setStatus('connecting');
+
+  try {
+    ws = new WebSocket(`${WS_ENDPOINT}?callsign=${encodeURIComponent(callsign)}`);
+  } catch (e) {
+    onInitialFail(`Invalid endpoint: ${e.message}`);
+    return;
+  }
+
+  ws.onopen = () => {
+    const wasReconnecting = currentStatus === 'reconnecting';
+
+    if (!inChat) {
+      inChat = true;
+      switchToChatScreen();
+    }
+
+    reconnectCount = 0;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    setStatus('connected');
+    reconnectBanner.classList.remove('show');
+    setInputEnabled(true);
+
+    if (wasReconnecting) appendNote('Reconnected.');
+  };
+
+  ws.onmessage = evt => {
+    let data;
+    try { data = JSON.parse(evt.data); } catch { return; }
+    if (data.type === 'message') renderChatMsg(data);
+    else if (data.type === 'system') renderSystemMsg(data);
+  };
+
+  ws.onclose = evt => {
+    setInputEnabled(false);
+
+    if (!inChat) {
+      // Failed before entering chat
+      onInitialFail('Could not connect. Check the callsign or try again.');
+      return;
+    }
+
+    if (evt.wasClean && evt.code === 1000) {
+      setStatus('disconnected');
+      return;
+    }
+
+    scheduleReconnect();
+  };
+
+  // onerror always precedes onclose; let onclose handle it.
+  ws.onerror = () => {};
+}
+
+function onInitialFail(msg) {
+  ws = null;
+  inChat = false;
+  joinBtn.disabled = false;
+  joinBtn.textContent = 'Join Chat';
+  showJoinError(msg);
+}
+
+function scheduleReconnect() {
+  if (reconnectCount >= MAX_RECONNECT) {
+    setStatus('disconnected');
+    reconnectBanner.classList.add('show');
+    return;
+  }
+  setStatus('reconnecting');
+  const delay = BACKOFF_MS[Math.min(reconnectCount, BACKOFF_MS.length - 1)];
+  reconnectCount++;
+  reconnectTimer = setTimeout(connect, delay);
+}
+
+function manualReconnect() {
+  reconnectCount = 0;
+  clearTimeout(reconnectTimer);
+  reconnectBanner.classList.remove('show');
+  connect();
+}
+
+// ── Send ──────────────────────────────────────────────────────
+function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ action: 'sendMessage', text }));
+  msgInput.value = '';
+  autoResizeTextarea();
+  updateSendBtn();
+}
+
+// ── Render ────────────────────────────────────────────────────
+function renderChatMsg(data) {
+  const isOwn = data.callsign === callsign;
+  const row = document.createElement('div');
+  row.className = `msg-row ${isOwn ? 'own' : 'other'}`;
+
+  if (!isOwn) {
+    const name = document.createElement('div');
+    name.className = 'msg-callsign';
+    name.textContent = data.callsign;
+    row.appendChild(name);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = data.text;
+  row.appendChild(bubble);
+
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.textContent = fmtTime(data.timestamp);
+  row.appendChild(time);
+
+  messageList.appendChild(row);
+  scrollBottom();
+}
+
+function renderSystemMsg(data) {
+  const label = data.event === 'user_joined'
+    ? `${data.callsign} joined`
+    : `${data.callsign} left`;
+  appendNote(label);
+}
+
+function appendNote(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row system';
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  messageList.appendChild(row);
+  scrollBottom();
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function switchToChatScreen() {
+  joinScreen.classList.remove('active');
+  chatScreen.classList.add('active');
+  headerCallsign.textContent = `· ${callsign}`;
+  msgInput.focus();
+}
+
+const STATUS_LABELS = {
+  connecting:   'Connecting…',
+  connected:    'Connected',
+  disconnected: 'Disconnected',
+  reconnecting: 'Reconnecting…',
+};
+
+function setStatus(s) {
+  currentStatus = s;
+  statusIndicator.className = `status ${s}`;
+  statusText.textContent = STATUS_LABELS[s] || s;
+}
+
+function setInputEnabled(on) {
+  msgInput.disabled = !on;
+  sendBtn.disabled  = !on || !msgInput.value.trim();
+}
+
+function updateSendBtn() {
+  sendBtn.disabled = !msgInput.value.trim() || !ws || ws.readyState !== WebSocket.OPEN;
+}
+
+function scrollBottom() {
+  messageList.scrollTop = messageList.scrollHeight;
+}
+
+function autoResizeTextarea() {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+// ── Event listeners ───────────────────────────────────────────
+joinBtn.addEventListener('click', tryJoin);
+callsignInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryJoin(); });
+callsignInput.addEventListener('input', clearJoinError);
+
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+msgInput.addEventListener('input', () => { autoResizeTextarea(); updateSendBtn(); });
+
+reconnectBtn.addEventListener('click', manualReconnect);
+
+// Keep the message list scrolled to bottom when viewport resizes
+// (e.g. virtual keyboard appearing on mobile)
+window.addEventListener('resize', scrollBottom);
+</script>
+</body>
+</html>
